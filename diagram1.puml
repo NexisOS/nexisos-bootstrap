@@ -1,0 +1,84 @@
+@startuml
+!theme cerulean
+skinparam svgDimensionStyle false
+skinparam svgBackgroundColor white
+
+title NexisOS Package Install – High-Level Flow
+
+actor User
+participant "CLI / API\n(Frontend)" as CLI
+participant "TOML Parser\n(Config Loader)" as Parser
+participant "Derivation Resolver\n(DAG Builder)" as Resolver
+participant "Execution Engine\n(Build Scheduler)" as Exec
+participant "Content Store\n(CAS + Merkle DAG)" as Store
+participant "Mutable Env Manager\n(Overlays/VFS)" as Mutable
+participant "Activation Manager\n(Generation Switch)" as Activate
+
+== User Request ==
+User -> CLI : install packageA
+CLI -> Parser : load TOML config
+
+== Derivation Resolution ==
+Parser -> Resolver : parsed config + dependencies
+Resolver -> Resolver : build persistent DAG
+Resolver -> Resolver : compute derivation hashes (BLAKE3)
+
+== Hash Lookup & Deduplication ==
+Resolver -> Store : query derivation hash
+Store -> Store : bloom filter pre-check
+alt Cache Hit
+    Store --> Resolver : derivation exists
+    Resolver -> Activate : use existing path
+else Cache Miss
+    Resolver -> Exec : schedule build/download
+end
+
+== Parallel Execution ==
+par Binary Download (if available)
+    Exec -> Store : fetch via HTTP/3 or BitTorrent
+    Store -> Store : verify BLAKE3 hash + chunks
+    Store --> Exec : download complete
+end
+
+par Source Build (if needed)
+    Exec -> Exec : hermetic sandboxed build\n(namespaces + cgroups)
+    Exec -> Store : write chunks with dedup-on-write
+    Store -> Store : chunk-level addressing\n(hybrid fixed + rolling)
+    Store --> Exec : build complete
+end
+
+== Mutable Environment Setup ==
+Exec -> Mutable : configure mutable work dirs\n(e.g., Java security dirs)
+Mutable -> Mutable : setup overlays or VFS
+Mutable -> Store : link immutable + mutable refs
+
+== Activation ==
+Store -> Activate : finalized paths + generation
+Activate -> Activate : update symlinks\n(atomic switch)
+Activate -> CLI : activation success
+CLI -> User : packageA installed ✓
+
+note over Exec
+**Execution Engine:**
+• Chase-Lev work stealing
+• Lock-free dependency traversal
+• Hermetic parallel builds
+• Deduplication on write
+end note
+
+note over Store
+**Content Store:**
+• Chunked CAS (BLAKE3)
+• Merkle DAG structure
+• Bloom filter pre-checks
+• ROAR bitmap for refs
+• Zstd/LZ4 compression
+end note
+
+note over Mutable
+**Mutable Manager:**
+• Overlays for work dirs
+• VFS for specific paths
+• No nix-ld needed
+end note
+@enduml

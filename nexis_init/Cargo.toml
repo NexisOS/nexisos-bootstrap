@@ -1,0 +1,66 @@
+[package]
+name = "nexis_init"
+version = "0.1.0"
+edition = "2021"
+authors = ["Kyle Gortych <kyle.gortych.dev@gmail.com>"]
+description = "Lightweight init system for NexisOS with pidfd + epoll service supervision"
+license = "GPL-3.0-or-later"
+repository = "https://github.com/NexisOS/NexisOS"
+homepage = "https://github.com/NexisOS/NexisOS"
+keywords = ["init", "system", "service-manager", "epoll", "pidfd"]
+categories = ["command-line-utilities", "development-tools", "os"]
+
+[lib]
+name = "nexis_init"
+path = "src/lib.rs"
+
+# =========================
+# Dependencies
+# =========================
+[dependencies]
+nexis_common = { path = "../nexis_common" }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "signal", "process", "fs", "time"] }
+rustix = { version = "0.38", features = ["fs", "process", "pipe", "event"] }
+
+# Optional security
+selinux = { version = "0.4", optional = true }
+
+# Optional logging
+tracing = { version = "0.1", optional = true, features = ["log", "attributes"] }
+tracing-subscriber = { version = "0.3", optional = true, features = ["env-filter", "fmt", "ansi", "tracing-log"] }
+
+# Optional parallelism
+rayon = { version = "1.10", optional = true }
+crossbeam = { version = "0.8", optional = true }
+dashmap = { version = "6.1", optional = true }
+
+# =========================
+# Dev dependencies
+# =========================
+[dev-dependencies]
+tokio-test = "0.4"
+assert_fs = "1.1"
+predicates = "3.1"
+
+# =========================
+# Features
+# =========================
+[features]
+default = ["logging", "parallelism"]
+logging = ["tracing", "tracing-subscriber"]
+selinux-support = ["selinux"]
+parallelism = ["rayon", "crossbeam", "dashmap"]
+
+# =========================
+# Profiles
+# =========================
+[profile.release]
+lto = "thin"
+codegen-units = 1
+panic = "abort"
+opt-level = 3
+strip = true
+
+[profile.dev]
+opt-level = 1
+debug = 2
