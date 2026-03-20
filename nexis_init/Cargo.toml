@@ -3,12 +3,12 @@ name = "nexis_init"
 version = "0.1.0"
 edition = "2021"
 authors = ["Kyle Gortych <kyle.gortych.dev@gmail.com>"]
-description = "Lightweight init system for NexisOS with pidfd + epoll service supervision"
+description = "Lightweight init system for NexisOS with pidfd + mio service supervision"
 license = "GPL-3.0-or-later"
 repository = "https://github.com/NexisOS/NexisOS"
 homepage = "https://github.com/NexisOS/NexisOS"
-keywords = ["init", "system", "service-manager", "epoll", "pidfd"]
-categories = ["command-line-utilities", "development-tools", "os"]
+keywords = ["init", "system", "service-manager", "mio", "pidfd"]
+categories = ["command-line-utilities", "os"]
 
 [lib]
 name = "nexis_init"
@@ -16,51 +16,47 @@ path = "src/lib.rs"
 
 # =========================
 # Dependencies
+#
+# PID 1 must be conservative: no async runtime, no thread pools,
+# no implicit allocations. Every crate here earns its place.
 # =========================
 [dependencies]
 nexis_common = { path = "../nexis_common" }
-tokio = { version = "1", features = ["rt-multi-thread", "macros", "signal", "process", "fs", "time"] }
-rustix = { version = "0.38", features = ["fs", "process", "pipe", "event"] }
 
-# Optional security
+# Event loop — thin epoll wrapper, no runtime, no executor
+mio = { version = "1", features = ["os-poll", "os-ext", "net"] }
+
+# Signal handling — sigprocmask + signalfd as a mio Source, replaces nix
+signal-hook = "0.3"
+signal-hook-mio = { version = "0.2", features = ["support-v1_0"] }
+
+# TOML service declarations
+toml = "0.8"
+serde = { version = "1.0", features = ["derive"] }
+
+# Logging — no-alloc in the hot path
+log = "0.4"
+
+# Raw syscalls (pidfd_open, fork, execvp, cgroup writes)
+libc = "0.2"
+
+# Optional SELinux domain transitions at exec time
 selinux = { version = "0.4", optional = true }
 
-# Optional logging
-tracing = { version = "0.1", optional = true, features = ["log", "attributes"] }
-tracing-subscriber = { version = "0.3", optional = true, features = ["env-filter", "fmt", "ansi", "tracing-log"] }
-
-# Optional parallelism
-rayon = { version = "1.10", optional = true }
-crossbeam = { version = "0.8", optional = true }
-dashmap = { version = "6.1", optional = true }
-
-# =========================
-# Dev dependencies
-# =========================
 [dev-dependencies]
-tokio-test = "0.4"
-assert_fs = "1.1"
-predicates = "3.1"
+tempfile = "3"
 
-# =========================
-# Features
-# =========================
 [features]
-default = ["logging", "parallelism"]
-logging = ["tracing", "tracing-subscriber"]
+default = []
 selinux-support = ["selinux"]
-parallelism = ["rayon", "crossbeam", "dashmap"]
 
 # =========================
-# Profiles
+# NOT used (and why):
+#   tokio    — async runtime is a liability for PID 1
+#   nix      — signal-hook replaces the only nix usage (signalfd);
+#              remaining syscalls use libc directly for smaller dep tree
+#   rayon    — PID 1 is single-threaded by design
+#   crossbeam, dashmap — no concurrent data structures needed
+#   tracing  — log crate is simpler and sufficient
+#   clap     — PID 1 takes no CLI args; nexisctl is separate
 # =========================
-[profile.release]
-lto = "thin"
-codegen-units = 1
-panic = "abort"
-opt-level = 3
-strip = true
-
-[profile.dev]
-opt-level = 1
-debug = 2
