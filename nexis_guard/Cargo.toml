@@ -1,0 +1,33 @@
+[package]
+name = "nexis_guard"
+version = "0.1.0"
+edition = "2024"
+description = "Unified security stack for NexisOS"
+
+[dependencies]
+nexis_common = { path = "../nexis_common" }
+
+# Workspace deps
+serde = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+thiserror = { workspace = true }
+toml = { workspace = true }
+clap = { workspace = true }
+
+# Tail backend log streams (Tetragon, Suricata, ClamAV)
+notify = "7"
+
+# Timestamps for unified alert normalization
+chrono = { version = "0.4", features = ["serde"] }
+
+# Colored terminal output for status/alerts
+owo-colors = "4"
+
+# Glob patterns for scan paths
+glob = "0.3"
+
+# Resolve config/data directories
+dirs = "6"
